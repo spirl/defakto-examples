@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spiffe-helper-client
+  labels:
+    app: spiffe-helper-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spiffe-helper-client
+  template:
+    metadata:
+      labels:
+        app: spiffe-helper-client
+        k8s.spirl.com/spiffe-csi: enabled
+    spec:
+      containers:
+        - name: request-svid
+          image: ubuntu:latest
+          command: ["bash", "/spiffe-helper-client/example.sh"]
+          volumeMounts:
+            - name: spiffe-helper-client-script
+              mountPath: /spiffe-helper-client
+            - name: spiffe-helper-output
+              mountPath: /spiffe-helper-output
+        - name: spiffe-helper
+          image: ghcr.io/spiffe/spiffe-helper:0.10.1
+          args: ["-config", "/spiffe-helper-config/helper.conf"]
+          volumeMounts:
+            - name: spiffe-helper-config
+              mountPath: /spiffe-helper-config
+            - name: spiffe-helper-output
+              mountPath: /spiffe-helper-output
+      volumes:
+        - name: spiffe-helper-client-script
+          configMap:
+            name: spiffe-helper-client-script
+        - name: spiffe-helper-config
+          configMap:
+            name: spiffe-helper-config
+        - name: spiffe-helper-output
+          emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spiffe-helper-client-script
+data:
+  example.sh: |
+    #!/bin/bash
+
+    echo "Starting spiffe-helper-client"
+    while true; do
+        token=$(cat /spiffe-helper-output/jwt-svid.json)
+
+        echo "Using token: $token"
+
+        sleep 10
+    done
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spiffe-helper-config
+data:
+  helper.conf: |
+    agent_address = "/run/spirl/sockets/agent.sock"
+    jwt_svids = [{jwt_audience="example.com", jwt_extra_audiences=[], jwt_svid_file_name="/spiffe-helper-output/jwt-svid.json"}]

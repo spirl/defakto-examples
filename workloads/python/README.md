@@ -12,7 +12,7 @@ If you have the [spirl-system helm chart](https://github.com/orgs/spirl/packages
 
 ### Other Environments
 
-Set the `SPIFFE_ENDPOINT_SOCKET` environment variable to the address of the Workload API exposed by the spirl-agent (e.g. unix:///run/spirl/sockets/agent.sock). Then run the Python script. 
+Set the `SPIFFE_ENDPOINT_SOCKET` environment variable to the address of the Workload API exposed by the spirl-agent (e.g. `unix:///run/spirl/sockets/agent.sock`). Then run the Python script. 
 
 
 
