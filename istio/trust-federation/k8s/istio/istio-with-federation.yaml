@@ -1,0 +1,41 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  values:
+    pilot:
+      env:
+        # REQUIRED: Enable multi-root mesh support
+        # Without this, caCertificates will be ignored by istiod
+        ISTIO_MULTIROOT_MESH: "true"
+  meshConfig:
+    # Istio continues to use cluster.local as its trust domain
+    trustDomain: cluster.local
+
+    defaultConfig:
+      proxyMetadata:
+        # REQUIRED: Enable XDS agent in proxies
+        # Without this, proxies won't process additional CA certificates
+        PROXY_CONFIG_XDS_AGENT: "true"
+
+    # CRITICAL CONFIGURATION: Add SPIRL CA certificates to the trust bundle
+    # This allows Istio-issued certificates to trust SPIRL-issued certificates
+    # The caCertificates field adds additional trusted CAs without changing
+    # Istio's primary CA (istiod)
+    caCertificates:
+      # Trust bundle from SPIRL trust domain (example.org)
+      # This PEM-encoded certificate will be added to Envoy's trusted CA bundle
+      - pem: |
+          __SPIRL_CA_BUNDLE__
+        # Specify which SPIFFE trust domain this CA signs for
+        # This enables validation of SPIFFE IDs from this trust domain
+        certSigners:
+          - spiffe://example.org
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway

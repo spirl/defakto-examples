@@ -1,0 +1,47 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  values:
+    pilot:
+      env:
+        # Enable multi-root mesh support
+        ISTIO_MULTIROOT_MESH: "true"
+        # Skip trust domain validation (more permissive, use if strict mode doesn't work)
+        PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+
+    global:
+      # Additional logging for troubleshooting
+      logging:
+        level: "default:info"
+
+  meshConfig:
+    # Primary trust domain (Istio's built-in CA)
+    trustDomain: cluster.local
+
+    # Add Defakto/SPIRL trust domain as an alias
+    trustDomainAliases:
+      - __DEFAKTO_TRUST_DOMAIN__
+
+    defaultConfig:
+      proxyMetadata:
+        # Enable XDS agent in proxies
+        PROXY_CONFIG_XDS_AGENT: "true"
+        # Additional debug logging (optional, can be removed)
+        # ISTIO_META_CERT_PROVIDER: "istiod"
+
+    # Add Defakto/SPIRL CA certificates to the trust bundle
+    caCertificates:
+      # Defakto/SPIRL CA certificate
+      # Try without trustDomains/certSigners restrictions first
+      - pem: |
+          __DEFAKTO_CA_BUNDLE__
+
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway

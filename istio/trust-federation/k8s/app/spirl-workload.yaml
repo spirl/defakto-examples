@@ -1,0 +1,143 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spirl-demo
+  labels:
+    # Enable Istio sidecar injection for this namespace
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: spirl-client
+  namespace: spirl-demo
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spiffe-helper-config
+  namespace: spirl-demo
+data:
+  helper.conf: |
+    agent_address = "/run/spirl/sockets/socket"
+    cmd = ""
+    cmd_args = ""
+    cert_dir = "/spiffe-workload"
+    svid_file_name = "svid.pem"
+    svid_key_file_name = "key.pem"
+    svid_bundle_file_name = "bundle.pem"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spirl-client
+  namespace: spirl-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spirl-client
+  template:
+    metadata:
+      labels:
+        app: spirl-client
+        # Enable SPIFFE CSI driver to inject agent socket
+        k8s.spirl.com/spiffe-csi: enabled
+    spec:
+      serviceAccountName: spirl-client
+      containers:
+      # Main application container
+      - name: app
+        image: alpine:latest
+        command:
+          - /bin/sh
+          - -c
+          - |
+            # Install openssl, curl, and Python for HTTP server
+            apk add --no-cache openssl curl python3 > /dev/null 2>&1
+
+            echo "Defakto Workload Service"
+            echo "========================"
+            echo ""
+            echo "This workload has:"
+            echo "1. Defakto-issued X.509-SVID (via SPIFFE Helper)"
+            echo "2. Istio sidecar proxy for service mesh connectivity"
+            echo "3. HTTP server on port 8080 for testing cross-CA mTLS"
+            echo ""
+            echo "The Istio proxy trusts BOTH:"
+            echo "- Istio-issued certificates (from istiod)"
+            echo "- Defakto-issued certificates (from Defakto CA)"
+            echo ""
+            echo "Checking for Defakto certificate..."
+            while true; do
+              if [ -f /spiffe-workload/svid.pem ]; then
+                echo "✓ Defakto certificate found"
+                echo ""
+                echo "SPIFFE ID:"
+                openssl x509 -in /spiffe-workload/svid.pem -text -noout | grep "URI:"
+                break
+              fi
+              echo "Waiting for SPIFFE Helper to provision certificate..."
+              sleep 2
+            done
+            echo ""
+            echo "Starting HTTP server on port 8080..."
+
+            # Create a simple HTTP response
+            cat > /tmp/index.html <<'EOF'
+            {
+              "service": "spirl-client",
+              "message": "Hello from SPIRL workload!",
+              "certificate": {
+                "type": "X.509-SVID",
+                "issuer": "Defakto CA",
+                "trust_domain": "defakto.example.com"
+              },
+              "status": "healthy"
+            }
+            EOF
+
+            # Start Python HTTP server
+            cd /tmp && python3 -m http.server 8080
+        volumeMounts:
+        - name: spiffe-workload
+          mountPath: /spiffe-workload
+          readOnly: true
+
+      # SPIFFE Helper sidecar - obtains X.509-SVID from SPIRL Agent
+      - name: spiffe-helper
+        image: ghcr.io/spiffe/spiffe-helper:0.10.1
+        args: ["-config", "/spiffe-helper-config/helper.conf"]
+        volumeMounts:
+        - name: spiffe-helper-config
+          mountPath: /spiffe-helper-config
+        - name: spiffe-workload
+          mountPath: /spiffe-workload
+        - name: spiffe-agent-socket
+          mountPath: /run/spirl/sockets
+          readOnly: true
+
+      volumes:
+      - name: spiffe-helper-config
+        configMap:
+          name: spiffe-helper-config
+      - name: spiffe-workload
+        emptyDir: {}
+      - name: spiffe-agent-socket
+        csi:
+          driver: "csi.spiffe.io"
+          readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spirl-client
+  namespace: spirl-demo
+spec:
+  selector:
+    app: spirl-client
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http

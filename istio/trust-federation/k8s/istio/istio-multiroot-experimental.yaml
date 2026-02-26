@@ -1,0 +1,67 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  values:
+    pilot:
+      env:
+        # Enable multi-root mesh support
+        ISTIO_MULTIROOT_MESH: "true"
+        # Optional: Skip trust domain validation (use with caution)
+        # PILOT_SKIP_VALIDATE_TRUST_DOMAIN: "true"
+
+    # Define a custom sidecar template for workloads that want SPIRL-issued certificates
+    # Workloads can opt into this template using the annotation:
+    #   inject.istio.io/templates: "sidecar,spirl"
+    sidecarInjectorWebhook:
+      templates:
+        # SPIRL template: Adds SPIFFE CSI driver volume for SPIRL certificate issuance
+        spirl: |
+          spec:
+            volumes:
+            - name: workload-socket
+              csi:
+                driver: "csi.spiffe.io"
+                readOnly: true
+            initContainers:
+            - name: istio-proxy
+              volumeMounts:
+              - name: workload-socket
+                mountPath: /run/secrets/workload-spiffe-uds
+                readOnly: true
+
+  meshConfig:
+    # Primary trust domain (Istio's built-in CA)
+    trustDomain: cluster.local
+
+    # Add Defakto/SPIRL trust domain as an alias
+    # This allows Istio to recognize and trust identities from this domain
+    trustDomainAliases:
+      - __DEFAKTO_TRUST_DOMAIN__
+
+    defaultConfig:
+      proxyMetadata:
+        # Enable XDS agent in proxies to process additional CA certificates
+        PROXY_CONFIG_XDS_AGENT: "true"
+
+    # Add Defakto/SPIRL CA certificates to the trust bundle
+    # This is the key configuration for multi-root trust
+    caCertificates:
+      # Defakto/SPIRL CA certificate
+      - pem: |
+          __DEFAKTO_CA_BUNDLE__
+        # Optional: Specify which SPIFFE trust domain(s) this CA signs for
+        # trustDomains:
+        #   - __DEFAKTO_TRUST_DOMAIN__
+        # Optional: Specify certificate signers (SPIFFE ID format)
+        certSigners:
+          - "spiffe://__DEFAKTO_TRUST_DOMAIN__"
+
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway

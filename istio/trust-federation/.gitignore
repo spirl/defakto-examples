@@ -1,0 +1,12 @@
+# Tilt
+.tiltbuild/
+
+# Temporary files
+*.tmp
+*.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

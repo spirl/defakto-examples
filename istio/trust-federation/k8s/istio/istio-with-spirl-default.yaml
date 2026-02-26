@@ -1,0 +1,57 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  values:
+    pilot:
+      env:
+        # Enable multi-root mesh support
+        ISTIO_MULTIROOT_MESH: "true"
+    # Modify the DEFAULT sidecar template to include SPIRL CSI driver
+    # This makes all newly deployed workloads receive SPIRL-issued certificates
+    sidecarInjectorWebhook:
+      # Inject SPIRL CSI volume into default sidecar template
+      templates:
+        sidecar: |
+          spec:
+            containers:
+            - name: istio-proxy
+              volumeMounts:
+              - name: workload-socket
+                mountPath: /run/secrets/workload-spiffe-uds
+                readOnly: true
+            volumes:
+            - name: workload-socket
+              csi:
+                driver: "csi.spiffe.io"
+                readOnly: true
+        # Keep the opt-in SPIRL template for backwards compatibility
+        spirl: |
+          spec:
+            containers:
+            - name: istio-proxy
+              volumeMounts:
+              - name: workload-socket
+                mountPath: /run/secrets/workload-spiffe-uds
+                readOnly: true
+            volumes:
+            - name: workload-socket
+              csi:
+                driver: "csi.spiffe.io"
+                readOnly: true
+  meshConfig:
+    # Istio uses cluster.local as its trust domain for the mesh
+    # But workloads will receive SPIRL certificates (example.org) by default
+    trustDomain: cluster.local
+    defaultConfig:
+      proxyMetadata:
+        # Enable XDS agent in proxies
+        PROXY_CONFIG_XDS_AGENT: "true"
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway

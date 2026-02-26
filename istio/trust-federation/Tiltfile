@@ -1,0 +1,163 @@
+# Istio Trust Federation Demo
+# Demonstrates adding SPIRL CA to an existing Istio cluster's trust bundle
+
+load('ext://uibutton', 'cmd_button')
+
+K8S_CONTEXT = "istio-trust-federation"
+BOOKINFO_LABEL = "Bookinfo"
+SPIRL_LABEL = "SPIRL-Workload"
+ISTIO_LABEL = "istio-system"
+TRUST_LABEL = "Trust-Configuration"
+
+# Istio installation might take longer than the default timeout
+update_settings(max_parallel_updates=3, k8s_upsert_timeout_secs=90, suppress_unused_image_warnings=None)
+
+# Set the Kubernetes context to the Kind cluster
+k8s_context(K8S_CONTEXT)
+
+# Load the Kubernetes manifests with Bookinfo app (uses Istio-issued certificates)
+k8s_yaml('k8s/app/bookinfo-spirl.yaml')
+k8s_resource('productpage-v1', labels=[BOOKINFO_LABEL], port_forwards='9080:9080', new_name='productpage', resource_deps=['install-istio'])
+k8s_resource('details-v1', labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('reviews-v2', labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('reviews-v3', labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('ratings-v1', labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+
+# Install Istio with built-in CA (istiod)
+local_resource(
+    'install-istio',
+    cmd='k8s/istio/install-istio.sh',
+    labels=[ISTIO_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+)
+
+# Add a button to check Istio status
+cmd_button(
+    name='Check Istio Status',
+    argv=['kubectl', 'get', 'pods', '-n', 'istio-system'],
+    text='View Istio pods',
+    resource='install-istio',
+    icon_name='list'
+)
+
+# Step 3: Enforce strict mTLS
+local_resource(
+    'enforce-strict-mtls',
+    cmd='kubectl apply -f k8s/istio/peer-authentication-strict.yaml',
+    labels=[ISTIO_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    resource_deps=['install-istio']
+)
+
+cmd_button(
+    name='Enforce Strict mTLS',
+    argv=['kubectl', 'apply', '-f', 'k8s/istio/peer-authentication-strict.yaml'],
+    text='Enforce strict mTLS mode (Step 3)',
+    resource='enforce-strict-mtls',
+    icon_name='lock'
+)
+
+# Install Kiali for observability
+k8s_custom_deploy(
+    'kiali',
+    apply_cmd='kubectl apply -f k8s/istio/kiali.yaml &> /dev/null && kubectl -n istio-system get deployment kiali -o yaml',
+    delete_cmd='kubectl delete -f k8s/istio/kiali.yaml --ignore-not-found=true || true',
+    deps=['install-istio'],
+)
+k8s_resource(
+    'kiali',
+    labels=[ISTIO_LABEL],
+    resource_deps=['install-istio'],
+    port_forwards='20001:20001',
+    links=[link('http://localhost:20001/kiali')],
+    auto_init=False
+)
+
+# Install Bookinfo Gateway
+local_resource(
+    'bookinfo-gateway',
+    cmd='kubectl apply -f k8s/istio/bookinfo-gateway.yaml',
+    labels=[ISTIO_LABEL],
+    resource_deps=['install-istio'],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+)
+
+# Port forward to Istio Ingress Gateway (Tilt handles reconnection automatically)
+k8s_custom_deploy(
+    'istio-ingressgateway-port-forward',
+    apply_cmd='kubectl -n istio-system get deployment istio-ingressgateway -o yaml',
+    delete_cmd='echo "Ingress gateway managed by Istio installation"',
+    deps=['install-istio', 'bookinfo-gateway'],
+)
+k8s_resource(
+    'istio-ingressgateway-port-forward',
+    port_forwards='8080:8080',
+    labels=[ISTIO_LABEL],
+    resource_deps=['install-istio'],
+    links=[link('http://localhost:8080/productpage', 'Bookinfo App')],
+    auto_init=True,
+)
+
+# SPIRL workload - demonstrates partial migration (mixed Istio + SPIRL certificates)
+# Uncomment after completing Step 5 (spirlctl cluster add) to deploy
+# k8s_yaml('k8s/app/spirl-workload.yaml')
+# k8s_resource('spirl-client', labels=[SPIRL_LABEL], new_name='spirl-client', auto_init=False)
+
+# Step 6: Add SPIRL template to Istio (OPTIONAL - Alternative approach)
+# The demo uses label-based approach (k8s.spirl.com/spiffe-csi: enabled)
+# This template provides an alternative annotation-based approach
+local_resource(
+    'add-spirl-template',
+    cmd='echo "Run ./k8s/istio/add-spirl-template.sh to add SPIRL sidecar template"',
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    labels=[TRUST_LABEL],
+    resource_deps=['install-istio']
+)
+
+cmd_button(
+    name='Add SPIRL Template',
+    argv=['bash', 'k8s/istio/add-spirl-template.sh'],
+    text='Add SPIRL sidecar template (Step 6 - Optional)',
+    resource='add-spirl-template',
+    icon_name='integration_instructions'
+)
+
+# Step 7: Add SPIRL trust bundle
+# KEY STEP: Configures Envoy proxies to trust both Istio CA and SPIRL CA
+local_resource(
+    'add-trust-bundle',
+    cmd='echo "Run ./k8s/istio/add-trust-bundle.sh to add SPIRL CA to trust bundle"',
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    labels=[TRUST_LABEL],
+    resource_deps=['install-istio']
+)
+
+cmd_button(
+    name='Add SPIRL Trust Bundle',
+    argv=['bash', '-c', 'export SPIRL_BUNDLE_ENDPOINT="${SPIRL_BUNDLE_ENDPOINT}" TRUST_DOMAIN="${TRUST_DOMAIN:-example.org}" && ./k8s/istio/add-trust-bundle.sh'],
+    text='Add SPIRL CA to Istio trust bundle (Step 7)',
+    resource='add-trust-bundle',
+    icon_name='vpn_key'
+)
+
+# Verification buttons
+cmd_button(
+    name='View Istio Config',
+    argv=['kubectl', 'get', 'configmap', 'istio', '-n', 'istio-system', '-o', 'jsonpath={.data.mesh}'],
+    text='View Istio mesh configuration',
+    resource='add-trust-bundle',
+    icon_name='settings'
+)
+
+cmd_button(
+    name='Check Proxy Status',
+    argv=['sh', '-c', 'istioctl proxy-status 2>/dev/null || echo "Istio not installed or no proxies"'],
+    text='Check Envoy proxy sync status',
+    resource='add-trust-bundle',
+    icon_name='sync'
+)
