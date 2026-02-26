@@ -1,0 +1,17 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  meshConfig:
+    # Use Istio's default trust domain
+    trustDomain: cluster.local
+    # Istio will use its built-in CA (istiod) for certificate issuance
+    # No additional CA configuration needed for initial setup
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway
