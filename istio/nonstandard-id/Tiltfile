@@ -1,0 +1,186 @@
+# Nonstandard SPIFFE ID Demo
+# Demonstrates istio/istio#43105: custom Defakto path templates break Istio's
+# hardcoded SAN validation, and DestinationRules are the current workaround.
+
+load('ext://uibutton', 'cmd_button')
+
+K8S_CONTEXT   = "kind-istio-nonstandard-id"
+BOOKINFO_LABEL = "Bookinfo"
+ISTIO_LABEL    = "istio-system"
+TRUST_LABEL    = "Trust-Configuration"
+
+update_settings(max_parallel_updates=3, k8s_upsert_timeout_secs=90,
+                suppress_unused_image_warnings=None)
+k8s_context(K8S_CONTEXT)
+
+# ── Bookinfo app (all pods pre-labeled for Defakto CSI injection) ──────────
+k8s_yaml('k8s/app/bookinfo.yaml')
+k8s_resource('productpage-v1', labels=[BOOKINFO_LABEL], port_forwards='9080:9080',
+             new_name='productpage', resource_deps=['install-istio'])
+k8s_resource('details-v1',    labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('reviews-v2',    labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('reviews-v3',    labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+k8s_resource('ratings-v1',    labels=[BOOKINFO_LABEL], resource_deps=['install-istio'])
+
+# ── Step 1: Install Istio ──────────────────────────────────────────────────
+local_resource(
+    'install-istio',
+    cmd='k8s/istio/install-istio.sh',
+    labels=[ISTIO_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+)
+cmd_button(
+    name='Check Istio Status',
+    argv=['kubectl', 'get', 'pods', '-n', 'istio-system'],
+    text='View Istio pods',
+    resource='install-istio',
+    icon_name='list',
+)
+
+# ── Step 2: Bookinfo Gateway ───────────────────────────────────────────────
+local_resource(
+    'bookinfo-gateway',
+    cmd='kubectl apply -f k8s/istio/bookinfo-gateway.yaml',
+    labels=[ISTIO_LABEL],
+    resource_deps=['install-istio'],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+)
+
+# Port-forward through ingress gateway
+k8s_custom_deploy(
+    'istio-ingressgateway-port-forward',
+    apply_cmd='kubectl -n istio-system get deployment istio-ingressgateway -o yaml',
+    delete_cmd='echo "Ingress gateway managed by Istio installation"',
+    deps=['install-istio', 'bookinfo-gateway'],
+)
+k8s_resource(
+    'istio-ingressgateway-port-forward',
+    port_forwards='8080:8080',
+    labels=[ISTIO_LABEL],
+    resource_deps=['install-istio'],
+    links=[link('http://localhost:8080/productpage', 'Bookinfo App')],
+    auto_init=True,
+)
+
+# ── Step 3: Enforce strict mTLS ────────────────────────────────────────────
+local_resource(
+    'enforce-strict-mtls',
+    cmd='kubectl apply -f k8s/istio/peer-authentication-strict.yaml',
+    labels=[ISTIO_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    resource_deps=['install-istio'],
+)
+
+# ── Step 4: Add Defakto trust bundle ──────────────────────────────────────
+# Prerequisite: run `spirlctl cluster add istio-nonstandard-id --trust-domain defakto.example.com --platform istio --path-template "..."` first (see README)
+local_resource(
+    'add-trust-bundle',
+    cmd='k8s/istio/add-trust-bundle.sh',
+    labels=[TRUST_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    resource_deps=['install-istio', 'enforce-strict-mtls'],
+)
+cmd_button(
+    name='Add Defakto Trust Bundle',
+    argv=['bash', '-c',
+          'export TRUST_DOMAIN="${TRUST_DOMAIN:-defakto.example.com}" ' +
+          'SPIRL_BUNDLE_ENDPOINT="${SPIRL_BUNDLE_ENDPOINT:-https://fed.spirl.org/t-o9cpowm5yo/td-tph7n4519n/bundle}" ' +
+          '&& ./k8s/istio/add-trust-bundle.sh'],
+    text='Add Defakto CA to Istio trust bundle (Step 4)',
+    resource='add-trust-bundle',
+    icon_name='vpn_key',
+)
+
+# ── Step 5: Restart pods to get Defakto certs ─────────────────────────────
+local_resource(
+    'restart-for-defakto',
+    cmd='k8s/istio/enable-defakto-certs.sh',
+    labels=[TRUST_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    resource_deps=['add-trust-bundle'],
+)
+cmd_button(
+    name='Enable Defakto Certs + Restart',
+    argv=['bash', '-c', './k8s/istio/enable-defakto-certs.sh'],
+    text='Update sidecar template and restart pods — gets Defakto certs (Step 5)',
+    resource='restart-for-defakto',
+    icon_name='refresh',
+)
+cmd_button(
+    name='Test mTLS (expect 503)',
+    argv=['bash', '-c',
+          'echo "Testing productpage → details (no DestinationRules yet)..." && echo "" && ' +
+          'STATUS=$(kubectl exec -n bookinfo deployment/productpage-v1 -c productpage -- ' +
+          '  python3 -c "import requests; r=requests.get(\'http://details:9080/details/0\', timeout=5); print(r.status_code)" 2>/dev/null) && ' +
+          'if [ "$STATUS" = "503" ]; then ' +
+          '  echo "✗ HTTP 503 — mTLS failed as expected" && echo "" && ' +
+          '  echo "Envoy rejected the server cert because the SAN" && ' +
+          '  echo "  spiffe://…/sa/bookinfo-details/wl/details" && ' +
+          '  echo "does not match the expected pattern" && ' +
+          '  echo "  spiffe://…/sa/bookinfo-details" && echo "" && ' +
+          '  echo "Apply DestinationRules (step 6) to fix this."; ' +
+          'elif [ "$STATUS" = "200" ]; then ' +
+          '  echo "✓ HTTP 200 — mTLS is working (DestinationRules already applied)"; ' +
+          'else ' +
+          '  echo "? HTTP $STATUS — unexpected response"; ' +
+          'fi'],
+    text='Send a request from productpage to details — expect 503 before DestinationRules',
+    resource='restart-for-defakto',
+    icon_name='error_outline',
+)
+cmd_button(
+    name='Show SPIFFE IDs',
+    argv=['bash', '-c',
+          'for svc in productpage details reviews ratings; do ' +
+          '  echo "=== $svc ==="; ' +
+          '  POD=$(kubectl get pod -n bookinfo -l app=$svc -o jsonpath="{.items[0].metadata.name}" 2>/dev/null); ' +
+          '  [ -n "$POD" ] && kubectl exec -n bookinfo "$POD" -c istio-proxy -- ' +
+          '    pilot-agent request GET certs 2>/dev/null | ' +
+          '    python3 -c "import sys,json; d=json.load(sys.stdin); ' +
+          '      print(d[\\"certificates\\"][0][\\"cert_chain\\"][0][\\"subject_alt_names\\"][0][\\"uri\\"])" ' +
+          '    2>/dev/null || echo "N/A"; ' +
+          'done'],
+    text='Show current SPIFFE IDs (should show /wl/<app> suffix)',
+    resource='restart-for-defakto',
+    icon_name='badge',
+)
+
+# ── Step 6: Apply DestinationRules (the fix) ──────────────────────────────
+local_resource(
+    'apply-destination-rules',
+    cmd='k8s/istio/apply-destination-rules.sh',
+    labels=[TRUST_LABEL],
+    auto_init=False,
+    trigger_mode=TRIGGER_MODE_MANUAL,
+    resource_deps=['restart-for-defakto'],
+)
+cmd_button(
+    name='Preview DestinationRules',
+    argv=['bash', '-c', './k8s/istio/preview-destination-rules.sh'],
+    text='Show what DestinationRules will be applied and why',
+    resource='apply-destination-rules',
+    icon_name='preview',
+)
+cmd_button(
+    name='Apply DestinationRules (Fix SAN Validation)',
+    argv=['bash', '-c',
+          'export TRUST_DOMAIN="${TRUST_DOMAIN:-defakto.example.com}" ' +
+          '&& ./k8s/istio/apply-destination-rules.sh'],
+    text='Apply DestinationRules with correct nonstandard SANs (Step 6)',
+    resource='apply-destination-rules',
+    icon_name='check_circle',
+)
+cmd_button(
+    name='Verify Success',
+    argv=['bash', '-c',
+          'export TRUST_DOMAIN="${TRUST_DOMAIN:-defakto.example.com}" ' +
+          '&& ./verify-nonstandard-id.sh'],
+    text='Run full verification',
+    resource='apply-destination-rules',
+    icon_name='verified',
+)

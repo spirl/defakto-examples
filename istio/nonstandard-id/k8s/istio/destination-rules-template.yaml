@@ -1,0 +1,64 @@
+# DestinationRules for nonstandard SPIFFE ID validation
+#
+# Context (istio/istio#43105): Istio hardcodes SAN validation to match
+#   spiffe://<trust_domain>/ns/<namespace>/sa/<serviceaccount>
+# When using an external SDS (Defakto) with a custom --path-template that adds
+# extra path components, Envoy rejects the certificate even though the CA is trusted.
+#
+# Fix: Override subjectAltNames per service with the actual nonstandard SPIFFE IDs.
+# IMPORTANT: mode: ISTIO_MUTUAL is required — without it, DestinationRule overrides
+# auto-mTLS and disables mutual TLS entirely.
+#
+# Template variable: ${TRUST_DOMAIN} (expanded by apply-destination-rules.sh)
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: details-nonstandard-id
+  namespace: bookinfo
+spec:
+  host: details
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+      subjectAltNames:
+        - spiffe://${TRUST_DOMAIN}/ns/bookinfo/sa/bookinfo-details/wl/details
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: productpage-nonstandard-id
+  namespace: bookinfo
+spec:
+  host: productpage
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+      subjectAltNames:
+        - spiffe://${TRUST_DOMAIN}/ns/bookinfo/sa/bookinfo-productpage/wl/productpage
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: reviews-nonstandard-id
+  namespace: bookinfo
+spec:
+  host: reviews
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+      subjectAltNames:
+        - spiffe://${TRUST_DOMAIN}/ns/bookinfo/sa/bookinfo-reviews/wl/reviews
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: ratings-nonstandard-id
+  namespace: bookinfo
+spec:
+  host: ratings
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
+      subjectAltNames:
+        - spiffe://${TRUST_DOMAIN}/ns/bookinfo/sa/bookinfo-ratings/wl/ratings

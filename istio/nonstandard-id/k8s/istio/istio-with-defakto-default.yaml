@@ -1,0 +1,48 @@
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  namespace: istio-system
+spec:
+  profile: default
+  values:
+    pilot:
+      env:
+        # Accept certs from trust domains other than cluster.local on the
+        # inbound path.  Without this, inbound listeners enforce
+        # match_subject_alt_names: prefix "spiffe://cluster.local/", which
+        # rejects Defakto-issued certs (spiffe://defakto.example.com/...).
+        ISTIO_MULTIROOT_MESH: "true"
+    # Register the 'spirl' opt-in injection template. When a pod's template
+    # annotation says "sidecar,spirl", Istio merges this with the built-in
+    # sidecar template. Strategic merge by volume name replaces the default
+    # workload-socket emptyDir with the actual SPIFFE CSI volume, making
+    # istio-proxy use the Defakto-issued credential.
+    sidecarInjectorWebhook:
+      templates:
+        spirl: |
+          spec:
+            volumes:
+            - name: workload-socket
+              csi:
+                driver: "csi.spiffe.io"
+                readOnly: true
+  meshConfig:
+    trustDomain: cluster.local
+    # Allow the inbound listener to accept client certs from the Defakto
+    # trust domain in addition to cluster.local.  Without this, the
+    # inbound SAN filter only matches spiffe://cluster.local/* and rejects
+    # Defakto-issued certs with SSLV3_ALERT_CERTIFICATE_UNKNOWN.
+    # IMPORTANT: keep this value aligned with the demo's TRUST_DOMAIN setting.
+    # defakto.example.com is the default; if TRUST_DOMAIN is overridden,
+    # update this entry to match or inbound mTLS will reject workload certs.
+    trustDomainAliases:
+      - defakto.example.com
+    defaultConfig:
+      proxyMetadata:
+        PROXY_CONFIG_XDS_AGENT: "true"
+  components:
+    ingressGateways:
+      - name: istio-ingressgateway
+        enabled: true
+        label:
+          istio: ingressgateway
