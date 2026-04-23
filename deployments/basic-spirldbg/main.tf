@@ -169,9 +169,6 @@ agent:
     priorityClassName: "system-node-critical"
     endpoint:
         endpoint: ${var.agent_endpoint}
-    env:
-        - name: SPIRL_DISABLE_TELEMETRY
-          value: "true"
     auth:
         clusterId: ${spirl_cluster.demo_cluster.id}
         attestors:
