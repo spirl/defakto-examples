@@ -6,6 +6,48 @@ terraform {
   }
 }
 
+variable "server_cluster_context" {
+  type   = string
+  default = ""
+  description = "Kubeconfig context for the server cluster"
+}
+
+variable "agent_cluster_context" {
+  type   = string
+  default = ""
+  description = "Kubeconfig context for the agent cluster"
+}
+
+variable "cluster_name" {
+  type   = string
+  default = ""
+  description = "Name of the Defakto cluster"
+}
+
+variable "trust_domain_name" {
+  type   = string
+  default = ""
+  description = "Name of the Defakto trust domain"
+}
+
+variable "agent_attestation_issuer_url" {
+  type   = string
+  default = ""
+  description = "Issuer URL for the agent attestation policy"
+}
+
+variable "cluster_path_template" {
+  type   = string
+  default = "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
+  description = "Path template for the Defakto cluster"
+}
+
+variable "agent_endpoint" {
+  type   = string
+  default = ""
+  description = "Endpoint for the agent to connect to the server"
+}
+
 # Configure the Spirl provider
 provider "spirl" {
 }
@@ -16,7 +58,7 @@ provider "helm" {
 
   kubernetes = {
     config_path    = "~/.kube/config"
-    config_context = "<AGENT_CLUSTER_CONTEXT>"
+    config_context = var.agent_cluster_context
   }
 }
 
@@ -26,7 +68,7 @@ provider "helm" {
 
   kubernetes = {
     config_path    = "~/.kube/config"
-    config_context = "<SERVER_CLUSTER_CONTEXT>"
+    config_context = var.server_cluster_context
   }
 }
 
@@ -34,37 +76,7 @@ provider "kubernetes" {
   alias = "agent_k8s"
 
   config_path    = "~/.kube/config"
-  config_context = "<AGENT_CLUSTER_CONTEXT>"
-}
-
-variable "cluster_name" {
-  type   = string
-  default = "<DEFAKTO_CLUSTER_NAME>"
-  description = "Name of the defakto cluster"
-}
-
-variable "trust_domain_name" {
-  type   = string
-  default = "<DEFAKTO_TRUST_DOMAIN_NAME>"
-  description = "Name of the defakto trust domain"
-}
-
-variable "agent_attestation_issuer_url" {
-  type   = string
-  default = "<AGENT_ATTESTATION_ISSUER_URL>"
-  description = "Issuer URL for the agent attestation policy"
-}
-
-variable "cluster_path_template" {
-  type   = string
-  default = "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
-  description = "Path template for the defakto cluster"
-}
-
-variable "agent_endpoint" {
-  type   = string
-  default = "<SERVER_ENDPOINT>:443"
-  description = "Endpoint for the agent to connect to the server"
+  config_context = var.agent_cluster_context
 }
 
 
