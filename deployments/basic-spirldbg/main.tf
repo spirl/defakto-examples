@@ -6,42 +6,57 @@ terraform {
   }
 }
 
+# Required: The name of the kubeconfig context for the Kubernetes cluster
+# where the spirl-server will be deployed.
 variable "server_cluster_context" {
   type   = string
   default = ""
   description = "Kubeconfig context for the server cluster"
 }
 
+# Required: The name of the kubeconfig context for the Kubernetes cluster
+# where workloads and the spirl-agent will be deployed.
 variable "agent_cluster_context" {
   type   = string
   default = ""
   description = "Kubeconfig context for the agent cluster"
 }
 
+# Optional: The name of the Defakto cluster.
+# Defaults to "defakto-cluster"
 variable "cluster_name" {
   type   = string
-  default = ""
+  default = "defakto-cluster"
   description = "Name of the Defakto cluster"
 }
 
+# Optional: The name of the Defakto trust domain.
+# Defaults to "example.com"
 variable "trust_domain_name" {
   type   = string
-  default = ""
+  default = "example.com"
   description = "Name of the Defakto trust domain"
 }
 
+# Required: the issuer URL for the Kubernetes service account token 
+# such as https://oidc.eks.us-west-2.amazonaws.com/id/<AWS_ACCOUNT_ID> for an EKS cluster
 variable "agent_attestation_issuer_url" {
   type   = string
   default = ""
   description = "Issuer URL for the agent attestation policy"
 }
 
+# Optional: the path template for the SPIFFE IDs created for this cluster
+# such as "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
 variable "cluster_path_template" {
   type   = string
-  default = "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
+  default = ""
   description = "Path template for the Defakto cluster"
 }
 
+# Required: The domain name and port for the spirl-server. This should be a
+# domain name that you own and configure with an Kubernetes Ingress to route
+# traffic to the spirl-server service. 
 variable "agent_endpoint" {
   type   = string
   default = ""
@@ -80,8 +95,8 @@ provider "kubernetes" {
 }
 
 
-# DO NOT DO THIS IN PRODUCTION
-# In production, you should generate a key pair using openssh  and store the private key securely
+# FOR DEMONSTRATION PURPOSES ONLY
+# In production, you should generate a key pair using openssh and store the private key securely
 resource "spirl_key_pair" "trust_domain_deployment" {
   algorithm = "ed25519"
 }
@@ -145,14 +160,6 @@ resource "helm_release" "spirl-server" {
           trustDomainID: "${spirl_trust_domain.test_domain.id}"
           id: "${spirl_trust_domain_deployment.test_tdd.id}"
           name: "${spirl_trust_domain_deployment.test_tdd.name}"
-          deployment:
-            resources:
-              limits:
-                cpu: 500m
-                memory: 512Mi
-              requests:
-                cpu: 100m
-                memory: 128Mi
 EOT
   ]
 
