@@ -22,6 +22,31 @@ variable "agent_cluster_context" {
   description = "Kubeconfig context for the agent cluster"
 }
 
+# Required: the issuer URL for the Kubernetes service account token 
+# such as https://oidc.eks.us-west-2.amazonaws.com/id/<AWS_ACCOUNT_ID> for an EKS cluster
+variable "agent_attestation_issuer_url" {
+  type   = string
+  default = ""
+  description = "Issuer URL for the agent attestation policy"
+}
+
+# Required: The domain name and port for the spirl-server. This should be a
+# domain name that you own and configure with an Kubernetes Ingress to route
+# traffic to the spirl-server service. E.g. "spirl-server.example.com:443"
+variable "agent_endpoint" {
+  type   = string
+  default = ""
+  description = "Endpoint for the agent to connect to the server"
+}
+
+# Optional: the path template for the SPIFFE IDs created for this cluster
+# such as "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
+variable "cluster_path_template" {
+  type   = string
+  default = ""
+  description = "Path template for the Defakto cluster"
+}
+
 # Optional: The name of the Defakto cluster.
 # Defaults to "defakto-cluster"
 variable "cluster_name" {
@@ -36,31 +61,6 @@ variable "trust_domain_name" {
   type   = string
   default = "example.com"
   description = "Name of the Defakto trust domain"
-}
-
-# Required: the issuer URL for the Kubernetes service account token 
-# such as https://oidc.eks.us-west-2.amazonaws.com/id/<AWS_ACCOUNT_ID> for an EKS cluster
-variable "agent_attestation_issuer_url" {
-  type   = string
-  default = ""
-  description = "Issuer URL for the agent attestation policy"
-}
-
-# Optional: the path template for the SPIFFE IDs created for this cluster
-# such as "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}"
-variable "cluster_path_template" {
-  type   = string
-  default = ""
-  description = "Path template for the Defakto cluster"
-}
-
-# Required: The domain name and port for the spirl-server. This should be a
-# domain name that you own and configure with an Kubernetes Ingress to route
-# traffic to the spirl-server service. E.g. "spirl-server.example.com:443"
-variable "agent_endpoint" {
-  type   = string
-  default = ""
-  description = "Endpoint for the agent to connect to the server"
 }
 
 # Configure the Spirl provider
