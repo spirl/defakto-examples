@@ -40,8 +40,13 @@ Required variables:
 
 - `agent_cluster_context`: kubeconfig context for the cluster where the Defakto agent will be deployed
 - `server_cluster_context`: kubeconfig context for the cluster where the Defakto server will be deployed
+- `agent_attestation_issuer_url`: the issuer URL for the Kubernetes service account token
+- `agent_endpoint`: the domain name and port for the spirl-server. This should be a domain name that you own and configure with an Kubernetes Ingress to route traffic to the spirl-server service
+
+Optional variables:
+
 - `cluster_name`: name of the Defakto cluster
 - `trust_domain_name`: trust domain name used by Defakto
-- `agent_attestation_issuer_url`: Issuer URL of the agent's Kubernetes cluster. Used for agent attestation
+- `cluster_path_template`: the path template for the SPIFFE IDs created for this cluster
 
 

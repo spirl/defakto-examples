@@ -56,7 +56,7 @@ variable "cluster_path_template" {
 
 # Required: The domain name and port for the spirl-server. This should be a
 # domain name that you own and configure with an Kubernetes Ingress to route
-# traffic to the spirl-server service. 
+# traffic to the spirl-server service. E.g. "spirl-server.example.com:443"
 variable "agent_endpoint" {
   type   = string
   default = ""
