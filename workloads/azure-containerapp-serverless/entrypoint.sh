@@ -10,4 +10,3 @@ grpcurl \
   -d "{\"attestations\": [{\"method_type\": \"azure_msi\", \"method_version\": \"1.0\", \"evidence\": \"$MSI_BYTES\"}]}" \
   $SPIRL_SERVER_ADDRESS \
   com.spirl.serverless.alpha.SpiffeWorkloadAPI/FetchX509SVID
-  
