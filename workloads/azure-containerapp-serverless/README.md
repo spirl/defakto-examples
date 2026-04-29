@@ -7,7 +7,7 @@ The container fetches an MSI token from the Azure IMDS endpoint, passes it to th
 ## Prerequisites
 
 - Azure CLI with the Container Apps extension (`az extension add --name containerapp`)
-- The image built from this directory pushed to a container registry, referenced below as `<IMAGE>`
+- The image built from the python directory pushed to a container registry, referenced below as `<IMAGE>`
 - A SPIRL Server with a serverless-enabled trust domain
 
 ## Steps
@@ -63,7 +63,7 @@ section: ServerlessAttestation
 schema: v1
 spec:
   policies:
-    - name: azure-msi-policy
+    - name: azure-spirl
       svidPolicy:
         pathTemplate: "/azure/{{azure_msi.identity.principal_id}}"
       requiredAttestors:
@@ -72,8 +72,12 @@ spec:
             tenants:
               - tenantID: "<TENANT_ID>"
                 principalID: "<PRINCIPAL_ID>"
-                audience: "https://storage.azure.com/"
+                audience: "fb60f99c-7a34-4190-8149-302f77469936"
+                issuerURL: "https://login.microsoftonline.com/e5aefa75-2f20-4be6-8bbc-e6000a7935ce/v2.0"
 ```
+
+Note that `fb60f99c-7a34-4190-8149-302f77469936` is the appID for the Azure AD Token Exchange Endpoint and is the default audience for MSI Tokens
+given to a containerapp job.
 
 ### 4. Run the job
 
