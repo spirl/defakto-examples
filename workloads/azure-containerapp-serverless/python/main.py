@@ -19,4 +19,4 @@ async def main():
         svid = await client.x509.get_svid()
         print("SPIFFE ID:", svid.id)
 
-asyncio.run(main())  
+asyncio.run(main())
