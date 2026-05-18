@@ -1,4 +1,4 @@
-# Basic Deployment with spirldbg
+# Self-hosted deployment with spirldbg
 
 This directory contains a basic Terraform configuration that deploys:
 
