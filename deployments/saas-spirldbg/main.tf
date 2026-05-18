@@ -62,12 +62,6 @@ provider "kubernetes" {
   config_context = var.agent_cluster_context
 }
 
-# FOR DEMONSTRATION PURPOSES ONLY
-# In production, you should generate a key pair using openssh and store the private key securely
-resource "spirl_key_pair" "trust_domain_deployment" {
-  algorithm = "ed25519"
-}
-
 resource "spirl_trust_domain" "test_domain" {
   domain_name = var.trust_domain_name
   self_hosted = false
