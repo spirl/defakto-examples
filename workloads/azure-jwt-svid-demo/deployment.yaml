@@ -57,7 +57,7 @@ data:
     }
 
     echo "Fetching JWT-SVID for Azure federation (audience: api://AzureADTokenExchange)..."
-    spirldbg svid-jwt --audience api://AzureADTokenExchange --raw --filename "$SVID_FILE"
+    spirldbg svid-jwt --audience api://AzureADTokenExchange --filename "$SVID_FILE"
 
     echo ""
     echo "Workload SPIFFE ID: $(decode_sub)"
@@ -66,7 +66,7 @@ data:
     echo ""
 
     while true; do
-      spirldbg svid-jwt --audience api://AzureADTokenExchange --raw --filename "$SVID_FILE" >/dev/null 2>&1
+      spirldbg svid-jwt --audience api://AzureADTokenExchange --filename "$SVID_FILE" >/dev/null 2>&1
 
       ACCESS_TOKEN=$(curl -s -X POST \
         "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token" \
