@@ -44,6 +44,11 @@ data:
   run.sh: |
     #!/bin/sh
 
+    # Without a trap, this script (running as the container's PID 1) ignores
+    # SIGTERM entirely, so Kubernetes has to wait out the full termination
+    # grace period on every restart before force-killing it.
+    trap 'exit 0' TERM INT
+
     SVID_FILE=/tmp/svid.jwt
     RESULT_FILE=/tmp/result.txt
     TOKEN_RESPONSE_FILE=/tmp/token_response.json
