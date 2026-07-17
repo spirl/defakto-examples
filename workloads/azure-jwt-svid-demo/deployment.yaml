@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: azure-jwt-svid-demo
+  labels:
+    app: azure-jwt-svid-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: azure-jwt-svid-demo
+  template:
+    metadata:
+      labels:
+        app: azure-jwt-svid-demo
+        k8s.spirl.com/spiffe-csi: enabled
+    spec:
+      containers:
+        - name: azure-jwt-svid-demo
+          image: ghcr.io/spirl/spirldbg:latest
+          command: ["sh", "/scripts/run.sh"]
+          env:
+            - name: AZURE_TENANT_ID
+              value: "<AZURE_TENANT_ID>"
+            - name: MI_CLIENT_ID
+              value: "<MI_CLIENT_ID>"
+            - name: STORAGE_ACCOUNT_NAME
+              value: "<STORAGE_ACCOUNT_NAME>"
+            - name: CONTAINER_NAME
+              value: "<CONTAINER_NAME>"
+          volumeMounts:
+            - name: azure-jwt-svid-demo-script
+              mountPath: /scripts
+      volumes:
+        - name: azure-jwt-svid-demo-script
+          configMap:
+            name: azure-jwt-svid-demo-script
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: azure-jwt-svid-demo-script
+data:
+  run.sh: |
+    #!/bin/sh
+
+    SVID_FILE=/tmp/svid.jwt
+    RESULT_FILE=/tmp/result.txt
+
+    decode_sub() {
+      payload=$(cut -d. -f2 "$SVID_FILE" | tr '_-' '/+')
+      mod=$(( ${#payload} % 4 ))
+      if [ "$mod" -eq 2 ]; then payload="${payload}=="
+      elif [ "$mod" -eq 3 ]; then payload="${payload}="
+      fi
+      printf '%s' "$payload" | base64 -d 2>/dev/null | grep -o '"sub" *: *"[^"]*"' | cut -d'"' -f4
+    }
+
+    echo "Fetching JWT-SVID for Azure federation (audience: api://AzureADTokenExchange)..."
+    spirldbg svid-jwt --audience api://AzureADTokenExchange --raw --filename "$SVID_FILE"
+
+    echo ""
+    echo "Workload SPIFFE ID: $(decode_sub)"
+    echo "Create the Azure federated credential with this SPIFFE ID as the subject."
+    echo "This workload will retry the Azure login every 15 seconds until the credential is ready."
+    echo ""
+
+    while true; do
+      spirldbg svid-jwt --audience api://AzureADTokenExchange --raw --filename "$SVID_FILE" >/dev/null 2>&1
+
+      ACCESS_TOKEN=$(curl -s -X POST \
+        "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "client_id=${MI_CLIENT_ID}" \
+        -d "scope=https://storage.azure.com/.default" \
+        -d "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+        -d "client_assertion=$(cat "$SVID_FILE")" \
+        -d "grant_type=client_credentials" | grep -o '"access_token" *: *"[^"]*"' | cut -d'"' -f4)
+
+      if [ -n "$ACCESS_TOKEN" ]; then
+        curl -s -X GET \
+          "https://${STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${CONTAINER_NAME}/test.txt" \
+          -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+          -H "x-ms-version: 2021-08-06" \
+          -o "$RESULT_FILE"
+
+        if grep -q "SPIFFE-to-Azure authentication succeeded" "$RESULT_FILE" 2>/dev/null; then
+          cat "$RESULT_FILE"
+          break
+        fi
+      fi
+
+      echo "Not ready yet, retrying in 15s..."
+      sleep 15
+    done
+
+    echo "Done. Container will now idle."
+    sleep infinity
