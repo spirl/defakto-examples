@@ -1,0 +1,28 @@
+# Generated identity material (regenerate with: go run ./common/certgen)
+/certs/*.crt
+/certs/*.key
+/certs/*.pem
+/certs/*.p12
+/certs/*.jks
+
+# Go
+/bin/
+
+# Java / Maven
+target/
+java-server/*/target/
+java-server/dependency-reduced-pom.xml
+
+# Envoy / func-e local install
+/.func-e/
+/bin/func-e
+*.log
+
+# Editor / OS
+.DS_Store
+
+# Bootstrap-only reference note (must not be committed)
+mtls-san-spiffe-enforcement.md
+
+# Internal build-instructions copy (not part of the demo deliverable)
+CLAUDE.md
