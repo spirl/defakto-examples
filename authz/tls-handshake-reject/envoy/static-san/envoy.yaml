@@ -1,0 +1,79 @@
+# Envoy server — "static config" variation.
+#
+# This is the pure-configuration, no-code way to reject an mTLS peer by SPIFFE
+# ID. The key is `match_typed_subject_alt_names` inside the DownstreamTlsContext:
+# Envoy verifies the client cert against the trust bundle (trusted_ca) AND
+# requires the URI SAN to match the regex below. If it does not match, Envoy
+# ABORTS THE TLS HANDSHAKE — no request is ever produced.
+#
+# This is the Envoy equivalent of the Go/Java handshake-time checks.
+#
+# Because rejection happens at the handshake, there is no upstream to forward
+# to for the reject case; for the accept case we use a `direct_response` so this
+# demo needs no backend server at all.
+#
+# Run from the repo root (so the certs/ relative paths resolve):
+#   func-e run -c envoy/static-san/envoy.yaml
+#
+# Then:
+#   go run ./common/client -addr localhost:8447 -id allowed   # -> 200
+#   go run ./common/client -addr localhost:8447 -id denied    # -> TLS handshake aborted
+
+admin:
+  address:
+    socket_address: { address: 127.0.0.1, port_value: 9901 }
+
+static_resources:
+  listeners:
+  - name: mtls_listener
+    address:
+      socket_address: { address: 127.0.0.1, port_value: 8447 }
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          stat_prefix: ingress_http
+          # Log every request/connection. TLS handshake failures are also
+          # reported on Envoy's stderr and in the admin interface.
+          access_log:
+          - name: envoy.access_loggers.stdout
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.access_loggers.stream.v3.StdoutAccessLog
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: local
+              domains: ["*"]
+              routes:
+              - match: { prefix: "/" }
+                # Only reached if the handshake (incl. SAN match) succeeded.
+                direct_response:
+                  status: 200
+                  body:
+                    inline_string: "hello, authorized client (Envoy static SAN match)\n"
+      transport_socket:
+        name: envoy.transport_sockets.tls
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+          require_client_certificate: true
+          common_tls_context:
+            tls_certificates:
+            - certificate_chain: { filename: "certs/server.crt" }
+              private_key: { filename: "certs/server.key" }
+            validation_context:
+              # The trust bundle: validates the client cert chain / trust domain.
+              trusted_ca: { filename: "certs/ca.crt" }
+              # THE CHECK (no code): the client's URI SAN must match this regex.
+              # This is the regex form of "path must start with /ns/prod/".
+              # Change the regex to enforce a suffix or any other pattern; see
+              # common/spiffeid/spiffeid.go for examples.
+              match_typed_subject_alt_names:
+              - san_type: URI
+                matcher:
+                  safe_regex:
+                    regex: "spiffe://example\\.org/ns/prod/.*"
