@@ -2,7 +2,10 @@
 
 Deploys a server and client workload in an existing Kubernetes cluster, connected over mTLS using SVIDs obtained via Envoy SDS from the Defakto agent.
 
-**Prerequisites:** A Kubernetes cluster with the Defakto agent already running (via the `spirl-system` Helm chart).
+## Prerequisites
+
+- A Defakto trust domain with a Trust Domain Server deployment. See the [quick start guide](https://doc.spirl.com/mint/quick-start/create-trust-domain) if you don't have one yet.
+- A Kubernetes cluster registered to that trust domain with the Defakto agent running (via the `spirl-system` Helm chart). See [adding a cluster](https://doc.spirl.com/mint/quick-start/add-k8s-to-trust-domain).
 
 ## What this deploys
 
