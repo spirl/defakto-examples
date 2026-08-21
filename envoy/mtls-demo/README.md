@@ -38,8 +38,11 @@ Expected output:
 
 ```
 --- Wed Aug 19 10:43:14 UTC 2026
-Hello from demo-server (SPIFFE ID: spiffe://<trust-domain>/<cluster-name>/ns/envoy-demo)
+Hello from demo-server
+Client SPIFFE ID: spiffe://<trust-domain>/<cluster-name>/ns/envoy-demo
 ```
+
+The `Client SPIFFE ID` line is extracted by the server-side Envoy from the client's mTLS certificate (`%DOWNSTREAM_PEER_URI_SAN%`) and forwarded to nginx as a request header. Seeing it confirms that the client presented a valid SVID and the mTLS handshake succeeded.
 
 To inspect the SDS stats and verify Envoy received its SVID:
 

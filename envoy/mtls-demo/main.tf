@@ -88,8 +88,8 @@ resource "kubernetes_config_map" "nginx" {
       server {
           listen 8080;
           location / {
-              return 200 'Hello from demo-server (SPIFFE ID: ${local.server_spiffe_id})\n';
               add_header Content-Type text/plain;
+              return 200 "Hello from demo-server\nClient SPIFFE ID: $http_x_client_spiffe_id\n";
           }
       }
     NGINX
@@ -193,6 +193,10 @@ resource "kubernetes_config_map" "envoy_server" {
                   virtual_hosts:
                   - name: local
                     domains: ["*"]
+                    request_headers_to_add:
+                    - header:
+                        key: x-client-spiffe-id
+                        value: "%DOWNSTREAM_PEER_URI_SAN%"
                     routes:
                     - match: { prefix: "/" }
                       route: { cluster: local_nginx }
