@@ -4,8 +4,8 @@ Deploys a server and client workload in an existing Kubernetes cluster, connecte
 
 ## Prerequisites
 
-- A Defakto trust domain with a Trust Domain Server deployment. See the [quick start guide](https://doc.spirl.com/mint/quick-start/create-trust-domain) if you don't have one yet.
-- A Kubernetes cluster registered to that trust domain with the Defakto agent running (via the `spirl-system` Helm chart). See [adding a cluster](https://doc.spirl.com/mint/quick-start/add-k8s-to-trust-domain).
+- A Defakto trust domain with a Trust Domain Server deployment. See the [quick start guide](https://d.defakto.security/mint/quick-start/create-trust-domain) if you don't have one yet.
+- A Kubernetes cluster registered to that trust domain with the Defakto agent running (via the `spirl-system` Helm chart). See [adding a cluster](https://d.defakto.security/mint/quick-start/add-k8s-to-trust-domain).
 
 ## What this deploys
 
