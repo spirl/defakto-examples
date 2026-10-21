@@ -1,0 +1,2 @@
+conductor-python==2.0.0
+spiffe==0.3.2

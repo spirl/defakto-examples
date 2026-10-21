@@ -1,0 +1,10 @@
+section: AgentAttestation
+schema: v1
+spec:
+  policies:
+    - name: k8s_policy
+      requiredAttestors:
+        - type: k8s_token
+          config:
+            issuerURL: https://kubernetes.default.svc.cluster.local
+            jwks: ${jwks_k8s}

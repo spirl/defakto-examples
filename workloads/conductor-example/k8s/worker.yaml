@@ -1,0 +1,57 @@
+# The service account is the identity: the Google service account's IAM binding names the
+# SPIFFE ID Defakto issues for it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: conductor-worker
+  namespace: conductor
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conductor-worker
+  namespace: conductor
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: conductor-worker}
+  template:
+    metadata:
+      labels:
+        app: conductor-worker
+        # Mounts the Workload API socket into the pod.
+        k8s.spirl.com/spiffe-csi: enabled
+    spec:
+      serviceAccountName: conductor-worker
+      securityContext: {runAsUser: 1000, runAsGroup: 1000, runAsNonRoot: true}
+      # The pinned packages from PyPI, so the worker runs on the public image as it is.
+      # Bake them into your own image in production.
+      initContainers:
+        - name: deps
+          image: python:3.14-alpine
+          command: ["pip", "install", "--quiet", "--no-cache-dir", "--disable-pip-version-check",
+                    "--target", "/deps", "-r", "/worker/requirements.txt"]
+          env:
+            - {name: HOME, value: /tmp}
+          volumeMounts:
+            - {name: worker, mountPath: /worker}
+            - {name: deps, mountPath: /deps}
+      containers:
+        - name: worker
+          image: python:3.14-alpine
+          command: ["python", "-u", "/worker/worker.py"]
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: PYTHONPATH, value: /deps}
+            - {name: CONDUCTOR_SERVER_URL, value: "http://conductor.conductor.svc:8080/api"}
+            # The Workload Identity Pool provider and the service account from the Google Cloud setup.
+            - {name: GCP_PROVIDER, value: "projects/<PROJECT_NUMBER>/locations/global/workloadIdentityPools/defakto-identity-pool/providers/defakto-oidc-provider"}
+            - {name: GCP_SERVICE_ACCOUNT, value: "defakto-conductor-example@<PROJECT_ID>.iam.gserviceaccount.com"}
+          volumeMounts:
+            - {name: worker, mountPath: /worker}
+            - {name: deps, mountPath: /deps}
+      volumes:
+        - name: worker
+          configMap: {name: conductor-worker}
+        - name: deps
+          emptyDir: {}

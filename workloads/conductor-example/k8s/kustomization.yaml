@@ -1,0 +1,14 @@
+# kubectl apply -k k8s/
+# The generated ConfigMap's name carries a hash of the worker's files, so editing either one
+# rolls the worker, which registers the workflow again when it starts.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - conductor.yaml
+  - worker.yaml
+configMapGenerator:
+  - name: conductor-worker
+    namespace: conductor
+    files:
+      - worker/worker.py
+      - worker/requirements.txt

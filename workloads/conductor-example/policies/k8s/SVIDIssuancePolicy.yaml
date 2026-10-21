@@ -1,0 +1,5 @@
+section: SVIDIssuancePolicy
+schema: v1
+spec:
+  policy:
+    pathTemplate: "/{{cluster.name}}/ns/{{kubernetes.pod.namespace}}/sa/{{kubernetes.pod.service_account}}"
