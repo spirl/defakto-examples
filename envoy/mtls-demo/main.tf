@@ -35,7 +35,7 @@ locals {
   server_sa        = "demo-server"
   client_sa        = "demo-client"
   # SPIFFE ID format follows the default Defakto K8s path template:
-  #   /{{cluster.name}}/ns/{{kubernetes.pod.namespace}}/sa/{{kubernetes.pod.service_account}}
+  #   /{{cluster.name}}/ns/{{kubernetes.pod.namespace}}
   server_spiffe_id = "spiffe://${var.trust_domain_name}/${var.cluster_name}/ns/${local.namespace}/sa/${local.server_sa}"
   client_spiffe_id = "spiffe://${var.trust_domain_name}/${var.cluster_name}/ns/${local.namespace}/sa/${local.client_sa}"
 }
