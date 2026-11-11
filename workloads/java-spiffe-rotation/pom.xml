@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>demo</groupId>
+  <artifactId>pingpong</artifactId>
+  <version>1.0</version>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Match the customer's java-spiffe version here to reproduce. -->
+    <java-spiffe.version>0.8.12</java-spiffe.version>
+  </properties>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.spiffe</groupId>
+      <artifactId>java-spiffe-core</artifactId>
+      <version>${java-spiffe.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.spiffe</groupId>
+      <artifactId>java-spiffe-provider</artifactId>
+      <version>${java-spiffe.version}</version>
+    </dependency>
+    <!-- Native Unix-domain-socket transport for the Workload API (x86_64 + aarch64). -->
+    <dependency>
+      <groupId>io.spiffe</groupId>
+      <artifactId>grpc-netty-linux</artifactId>
+      <version>${java-spiffe.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals><goal>copy-dependencies</goal></goals>
+            <configuration><outputDirectory>${project.build.directory}/lib</outputDirectory></configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
