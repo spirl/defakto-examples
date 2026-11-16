@@ -1,0 +1,64 @@
+# Two java-spiffe ping-pong services that mTLS-ping each other.
+# Distinct service accounts -> distinct SPIFFE IDs:
+#   spiffe://<TD>/ns/java-pingpong/sa/ping-a  and  .../sa/ping-b
+# Replace the image if you pushed it somewhere other than a local/kind image.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: java-pingpong
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: ping-a, namespace: java-pingpong }
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: ping-b, namespace: java-pingpong }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ping-a, namespace: java-pingpong }
+spec:
+  selector: { matchLabels: { app: ping-a } }
+  template:
+    metadata: { labels: { app: ping-a, k8s.spirl.com/spiffe-csi: enabled } }
+    spec:
+      serviceAccountName: ping-a
+      containers:
+        - name: app
+          image: public.ecr.aws/i9n0x0f1/dans/java-spiffe-pingpong:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8443 }]
+          env:
+            - { name: PEER_URL, value: "https://ping-b.java-pingpong.svc:8443" }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: ping-b, namespace: java-pingpong }
+spec:
+  selector: { matchLabels: { app: ping-b } }
+  template:
+    metadata: { labels: { app: ping-b, k8s.spirl.com/spiffe-csi: enabled } }
+    spec:
+      serviceAccountName: ping-b
+      containers:
+        - name: app
+          image: public.ecr.aws/i9n0x0f1/dans/java-spiffe-pingpong:dev
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8443 }]
+          env:
+            - { name: PEER_URL, value: "https://ping-a.java-pingpong.svc:8443" }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ping-a, namespace: java-pingpong }
+spec:
+  selector: { app: ping-a }
+  ports: [{ port: 8443, targetPort: 8443 }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: ping-b, namespace: java-pingpong }
+spec:
+  selector: { app: ping-b }
+  ports: [{ port: 8443, targetPort: 8443 }]
